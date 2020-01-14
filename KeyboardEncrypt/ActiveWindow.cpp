@@ -19,6 +19,7 @@ extern "C"{
 
 
 	extern ULONG g_RelatedProcessId;
+	extern KEVENT g_ThreadTerminalEvent;
 
 	BOOLEAN	g_IsActive = FALSE;
 
@@ -28,6 +29,10 @@ extern "C"{
 
 	ULONGLONG GetGuiThread(PEPROCESS eprocess)
 	{
+		typedef struct _MY_EPROCESS_WIN10_1703_X64_ *PMY_EPROCESS, MY_EPROCESS;
+		typedef struct _MY_ETHREAD_WIN10_1703_X64_ *PMY_ETHREAD, MY_ETHREAD;
+		typedef struct _MY_KTHREAD_WIN10_1703_X64_ *PMY_KTHREAD, MY_KTHREAD;
+
 		PMY_EPROCESS myEprocess;
 
 		myEprocess = (PMY_EPROCESS)eprocess;
@@ -89,6 +94,12 @@ extern "C"{
 
 			PETHREAD currentEThread = KeGetCurrentThread();
 
+
+			typedef struct _MY_EPROCESS_WIN10_1703_X64_ *PMY_EPROCESS, MY_EPROCESS;
+			typedef struct _MY_ETHREAD_WIN10_1703_X64_ *PMY_ETHREAD, MY_ETHREAD;
+			typedef struct _MY_KTHREAD_WIN10_1703_X64_ *PMY_KTHREAD, MY_KTHREAD;
+
+
 			((PMY_KTHREAD)currentEThread)->Win32Thread = GetGuiThread(relProcEProcess);
 
 			ULONG_PTR hActiveWindow = NtUserGetForegroundWindow();
@@ -120,11 +131,19 @@ extern "C"{
 	{
 		while (TRUE)
 		{
-			// 这用的时候最好有个自旋锁
-			g_IsActive = IsRelatedWindowActive();
 			LARGE_INTEGER delayTime = { 0 };
 
 			delayTime = RtlConvertLongToLargeInteger(100 * -10000);
+
+			NTSTATUS status = KeWaitForSingleObject(&g_ThreadTerminalEvent, Executive, KernelMode, FALSE, &delayTime);
+
+			if (status == STATUS_SUCCESS)
+			{
+				PsTerminateSystemThread(STATUS_SUCCESS);
+			}
+
+			g_IsActive = IsRelatedWindowActive();
+
 
 			PKTHREAD currentThread = KeGetCurrentThread();
 
@@ -132,7 +151,6 @@ extern "C"{
 
 		}
 
-		PsTerminateSystemThread(STATUS_SUCCESS);
 	}
 
 
